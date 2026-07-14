@@ -4,8 +4,29 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>北海道 オホーツク・道東 道の駅マップ</title>
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin=""/>
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css" />
+  <script>
+    window.__leafletReady = new Promise((resolve, reject) => {
+      const sources = [
+        'https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js',
+        'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js',
+        'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'
+      ];
+      let index = 0;
+      const loadNext = () => {
+        if (window.L) { resolve(); return; }
+        if (index >= sources.length) { reject(new Error('Leaflet load failed')); return; }
+        const script = document.createElement('script');
+        script.src = sources[index++];
+        script.async = false;
+        script.onload = () => window.L ? resolve() : loadNext();
+        script.onerror = loadNext;
+        document.head.appendChild(script);
+      };
+      loadNext();
+    });
+  </script>
   <style>
     html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
     body { display: flex; flex-direction: column; background: #f7f7f7; color: #222; }
@@ -159,10 +180,12 @@
       <button id="closeRoutePanel" class="route-close" aria-label="閉じる">×</button>
     </div>
     <div class="route-body">
-      <div class="route-help">各道の駅カードまたは地図ポップアップの「ルートに追加」を選択してください。手動で↑↓調整できるほか、「順番を最適化」で地点間の直線距離が短くなる近似順へ並べ替えます。Google Mapsを開くと、実際の道路に沿った車ルートを検索します。</div>
+      <div class="route-help">各道の駅カードまたは地図ポップアップの「ルートに追加」を選択してください。「現在地から最適化」は、端末の現在地を出発点として最寄り駅から近似最短順へ並べ替えます。位置情報はサーバーへ送信・保存しません。</div>
+      <div id="locationStatus" class="route-help" aria-live="polite">現在地：未取得</div>
       <div id="routeList"></div>
       <div class="route-actions">
-        <button id="optimizeRoute">順番を最適化</button>
+        <button id="optimizeFromCurrent">現在地から最適化</button>
+        <button id="optimizeRoute">現在地を使わず最適化</button>
         <button id="reverseRoute">順番を反転</button>
         <button id="clearRoute" type="button">全て解除</button>
         <button id="openGoogleRoute">Google Mapsで開く</button>
@@ -181,6 +204,20 @@
   </details>
 
 <script>
+(async function bootApp() {
+  const loadingEl = document.getElementById('countInfo');
+  const statusEl = document.getElementById('status');
+  try {
+    await window.__leafletReady;
+  } catch (error) {
+    console.error(error);
+    statusEl.textContent = '地図ライブラリを読み込めませんでした。通信環境を確認してください。';
+    loadingEl.textContent = '地図を読み込めませんでした';
+    const list = document.getElementById('stationList');
+    list.innerHTML = '<div style="padding:16px;line-height:1.7">地図ライブラリの読み込みに失敗しました。Safariでインターネット接続を有効にして再読み込みしてください。<br>ChatGPTアプリ内プレビューでは外部ライブラリが制限される場合があります。</div>';
+    return;
+  }
+  try {
 const stations = [
   {
     "name": "かみゆうべつ温泉 チューリップの湯",
@@ -707,6 +744,7 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 const markerLayer = L.layerGroup().addTo(map);
 const routePreviewLayer = L.layerGroup().addTo(map);
+const currentLocationLayer = L.layerGroup().addTo(map);
 const STORAGE_KEYS = {
   completed: 'okhotsk_doto_stamp_completed_v1',
   route: 'okhotsk_doto_route_selection_v1'
@@ -733,7 +771,8 @@ const state = {
   activeAreas: new Set(["オホーツク", "十勝", "釧路・根室"]),
   searchText: '',
   completed: new Set(loadStoredArray(STORAGE_KEYS.completed)),
-  route: loadStoredArray(STORAGE_KEYS.route).filter(name => stations.some(s => s.name === name))
+  route: loadStoredArray(STORAGE_KEYS.route).filter(name => stations.some(s => s.name === name)),
+  currentLocation: null
 };
 
 function cacheKey(station) {
@@ -932,11 +971,22 @@ function refreshAllPopups() {
 
 function updateRoutePreview() {
   routePreviewLayer.clearLayers();
+  currentLocationLayer.clearLayers();
   const selected = state.route.map(name => stations.find(s => s.name === name)).filter(Boolean);
+
+  if (state.currentLocation) {
+    L.circleMarker([state.currentLocation.lat, state.currentLocation.lon], {
+      radius: 8, color: '#ffffff', weight: 3, fillColor: '#2563eb', fillOpacity: 1
+    }).bindTooltip('現在地').addTo(currentLocationLayer);
+  }
+
   if (!selected.length) return;
   const coords = selected.map(s => [s.lat, s.lon]);
-  if (coords.length >= 2) {
-    L.polyline(coords, { color: '#f0a202', weight: 4, opacity: 0.8, dashArray: '8 6' }).addTo(routePreviewLayer);
+  const previewCoords = state.currentLocation
+    ? [[state.currentLocation.lat, state.currentLocation.lon], ...coords]
+    : coords;
+  if (previewCoords.length >= 2) {
+    L.polyline(previewCoords, { color: '#f0a202', weight: 4, opacity: 0.8, dashArray: '8 6' }).addTo(routePreviewLayer);
   }
   selected.forEach((station, index) => {
     L.marker([station.lat, station.lon], {
@@ -1015,6 +1065,87 @@ function twoOptOpenPath(order) {
   return best;
 }
 
+function getCurrentPositionAsync() {
+  return new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+      reject(new Error('このブラウザは位置情報取得に対応していません。'));
+      return;
+    }
+    navigator.geolocation.getCurrentPosition(
+      position => resolve({
+        lat: position.coords.latitude,
+        lon: position.coords.longitude,
+        accuracy: position.coords.accuracy
+      }),
+      error => {
+        const messages = {
+          1: '位置情報の利用が許可されていません。ブラウザのサイト設定で位置情報を許可してください。',
+          2: '現在地を取得できませんでした。GPSや通信状態を確認してください。',
+          3: '現在地の取得がタイムアウトしました。もう一度お試しください。'
+        };
+        reject(new Error(messages[error.code] || '現在地の取得に失敗しました。'));
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+    );
+  });
+}
+
+async function optimizeRouteFromCurrentLocation() {
+  const points = state.route.map(name => stations.find(s => s.name === name)).filter(Boolean);
+  if (points.length < 2) {
+    alert('現在地からの最適化には2駅以上を選択してください。');
+    return;
+  }
+
+  const button = document.getElementById('optimizeFromCurrent');
+  const locationStatus = document.getElementById('locationStatus');
+  button.disabled = true;
+  button.textContent = '現在地を取得中…';
+  locationStatus.textContent = '現在地：取得中…';
+
+  try {
+    const current = await getCurrentPositionAsync();
+    state.currentLocation = current;
+
+    const remaining = points.slice();
+    const initialOrder = [{ name: '__CURRENT__', lat: current.lat, lon: current.lon }];
+    let cursor = initialOrder[0];
+    while (remaining.length) {
+      let bestIndex = 0;
+      let bestDistance = Infinity;
+      remaining.forEach((point, index) => {
+        const distance = haversineKm(cursor, point);
+        if (distance < bestDistance) {
+          bestDistance = distance;
+          bestIndex = index;
+        }
+      });
+      cursor = remaining.splice(bestIndex, 1)[0];
+      initialOrder.push(cursor);
+    }
+
+    const optimizedWithCurrent = twoOptOpenPath(initialOrder);
+    const optimizedStations = optimizedWithCurrent.filter(point => point.name !== '__CURRENT__');
+    state.route = optimizedStations.map(station => station.name);
+    saveStoredArray(STORAGE_KEYS.route, state.route);
+
+    const totalDistance = routeDistance(optimizedWithCurrent);
+    const accuracyText = Number.isFinite(current.accuracy) ? `（精度 約${Math.round(current.accuracy)}m）` : '';
+    locationStatus.textContent = `現在地：取得済み${accuracyText}`;
+    syncAllViews();
+    map.setView([current.lat, current.lon], Math.max(map.getZoom(), 9), { animate: true });
+    alert(`現在地を出発点として近似最短順へ並べ替えました（直線距離の合計 約${Math.round(totalDistance)}km）。実際の道路ルートはGoogle Mapsでご確認ください。`);
+  } catch (error) {
+    state.currentLocation = null;
+    locationStatus.textContent = `現在地：取得失敗 — ${error.message}`;
+    updateRoutePreview();
+    alert(error.message + '\\n\\nGitHub PagesのHTTPS URLをSafariまたはChromeで開き、位置情報を許可してください。');
+  } finally {
+    button.disabled = false;
+    button.textContent = '現在地から最適化';
+  }
+}
+
 function optimizeRouteOrder() {
   const points = state.route.map(name => stations.find(s => s.name === name)).filter(Boolean);
   if (points.length < 3) {
@@ -1050,9 +1181,12 @@ function buildGoogleMapsUrls() {
   }
   return segments.map(segment => {
     const place = s => `${s.lat},${s.lon}`;
-    const origin = place(segment[0]);
+    const isFirstSegment = segment === segments[0];
+    const origin = isFirstSegment && state.currentLocation
+      ? `${state.currentLocation.lat},${state.currentLocation.lon}`
+      : place(segment[0]);
     const destination = place(segment[segment.length - 1]);
-    const waypoints = segment.slice(1, -1).map(place).join('|');
+    const waypoints = (isFirstSegment && state.currentLocation ? segment.slice(0, -1) : segment.slice(1, -1)).map(place).join('|');
     let url = `https://www.google.com/maps/dir/?api=1&origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&travelmode=driving`;
     if (waypoints) url += `&waypoints=${encodeURIComponent(waypoints)}`;
     return url;
@@ -1123,6 +1257,7 @@ document.getElementById('openRoutePanel').addEventListener('click', () => {
   renderRoutePanel();
 });
 document.getElementById('closeRoutePanel').addEventListener('click', () => document.getElementById('routePanel').classList.remove('open'));
+document.getElementById('optimizeFromCurrent').addEventListener('click', optimizeRouteFromCurrentLocation);
 document.getElementById('optimizeRoute').addEventListener('click', optimizeRouteOrder);
 document.getElementById('reverseRoute').addEventListener('click', () => {
   state.route.reverse();
@@ -1132,6 +1267,9 @@ document.getElementById('reverseRoute').addEventListener('click', () => {
 function clearRouteSelection() {
   // 配列を同じ参照のまま空にし、参照を保持している処理とも確実に同期する。
   state.route.splice(0, state.route.length);
+  state.currentLocation = null;
+  const locationStatus = document.getElementById('locationStatus');
+  if (locationStatus) locationStatus.textContent = '現在地：未取得';
 
   // 空配列の保存に加えて、古い値が復元されないようキー自体も削除する。
   try {
@@ -1170,6 +1308,14 @@ document.getElementById('openGoogleRoute').addEventListener('click', () => {
 
 initializeMobileView();
 initializeFixedMarkers();
+
+  } catch (error) {
+    console.error('初期化エラー', error);
+    statusEl.textContent = '初期化中にエラーが発生しました';
+    loadingEl.textContent = '読み込みに失敗しました';
+    document.getElementById('stationList').innerHTML = '<div style="padding:16px;line-height:1.7">初期化に失敗しました。Safariで開き直すか、ページを再読み込みしてください。</div>';
+  }
+})();
 </script>
 </body>
 </html>
