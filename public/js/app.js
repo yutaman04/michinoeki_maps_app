@@ -32,6 +32,9 @@ function setMobileView(mode, save = true) {
   if (save) {
     try { localStorage.setItem(MOBILE_VIEW_STORAGE_KEY, nextMode); } catch (e) {}
   }
+  if (nextMode !== 'split') {
+    layout.style.gridTemplateRows = '';
+  }
   // display:noneから地図を復帰した際、Leafletに新しい表示寸法を再計算させる。
   if (nextMode !== 'list') {
     requestAnimationFrame(() => {
@@ -56,6 +59,43 @@ function initializeMobileView() {
     if (!isMobileLayout()) return;
     const mode = document.getElementById('layout').dataset.mobileView;
     if (mode !== 'list') requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+  });
+  initSplitHandle();
+}
+
+function initSplitHandle() {
+  const handle = document.getElementById('splitHandle');
+  const layout = document.getElementById('layout');
+  let dragging = false;
+
+  handle.addEventListener('pointerdown', e => {
+    if (!isMobileLayout()) return;
+    dragging = true;
+    handle.setPointerCapture(e.pointerId);
+    handle.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  handle.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const rect = layout.getBoundingClientRect();
+    const HANDLE_H = 20;
+    const MIN_MAP = 150;
+    const MIN_LIST = 100;
+    const maxMap = rect.height - HANDLE_H - MIN_LIST;
+    const mapHeight = Math.min(Math.max(e.clientY - rect.top, MIN_MAP), maxMap);
+    layout.style.gridTemplateRows = `${mapHeight}px ${HANDLE_H}px minmax(${MIN_LIST}px, 1fr)`;
+    map.invalidateSize({ pan: false });
+  });
+
+  handle.addEventListener('pointerup', () => {
+    dragging = false;
+    handle.classList.remove('dragging');
+  });
+
+  handle.addEventListener('pointercancel', () => {
+    dragging = false;
+    handle.classList.remove('dragging');
   });
 }
 

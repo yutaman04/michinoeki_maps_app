@@ -73,6 +73,10 @@ header p { margin: 0; font-size: 13px; line-height: 1.5; opacity: 0.95; }
 button, .btn-link { font-size: 12px; padding: 6px 8px; border-radius: 8px; border: 1px solid #c8d1dc; background: white; cursor: pointer; text-decoration: none; color: #0b4a87; }
 button:hover, .btn-link:hover { background: #f3f8ff; }
 #map { width: 100%; height: 100%; }
+#splitHandle { display: none; align-items: center; justify-content: center; background: #e8ecf0; cursor: row-resize; touch-action: none; user-select: none; flex-shrink: 0; }
+#splitHandle::after { content: ''; display: block; width: 36px; height: 4px; border-radius: 2px; background: #9fb0c0; }
+#splitHandle:hover { background: #d8e2ea; }
+#splitHandle.dragging { background: #c8d8e8; }
 .leaflet-popup-content { font-size: 13px; line-height: 1.5; }
 .popup-title { font-weight: 700; font-size: 15px; margin-bottom: 4px; }
 .popup-controls { display:flex; flex-wrap:wrap; gap:10px; margin:9px 0 4px; padding-top:8px; border-top:1px solid #e2e2e2; }
@@ -92,9 +96,10 @@ button:hover, .btn-link:hover { background: #f3f8ff; }
   #mobileViewControls { display: inline-flex; order: 15; margin-left: auto; }
   #routePanel { top: 62px; right: 6px; width: calc(100vw - 12px); max-height: calc(100dvh - 72px); }
   #layout { min-height: 0; grid-template-columns: 1fr; }
-  #layout[data-mobile-view="split"] { grid-template-rows: minmax(245px, 42dvh) minmax(0, 1fr); }
+  #layout[data-mobile-view="split"] { grid-template-rows: minmax(150px, 42dvh) 20px minmax(100px, 1fr); }
   #layout[data-mobile-view="split"] #mapWrap { display: block; order: 1; min-height: 0; }
-  #layout[data-mobile-view="split"] #sidebar { display: block; order: 2; min-height: 0; border-right: 0; border-top: 1px solid #ddd; }
+  #layout[data-mobile-view="split"] #splitHandle { display: flex; order: 2; }
+  #layout[data-mobile-view="split"] #sidebar { display: block; order: 3; min-height: 0; border-right: 0; }
   #layout[data-mobile-view="map"] { display: block; }
   #layout[data-mobile-view="map"] #mapWrap { display: block; height: 100%; }
   #layout[data-mobile-view="map"] #sidebar { display: none; }
