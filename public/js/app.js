@@ -96,7 +96,8 @@ const state = {
   searchText: '',
   completed: new Set(loadStoredArray(STORAGE_KEYS.completed)),
   route: loadStoredArray(STORAGE_KEYS.route).filter(name => stations.some(s => s.name === name)),
-  currentLocation: null
+  currentLocation: null,
+  listTab: 'all'
 };
 
 function cacheKey(station) {
@@ -183,7 +184,7 @@ function stationMatches(station) {
 function renderList(fitMap = false) {
   const list = document.getElementById('stationList');
   list.innerHTML = '';
-  const filtered = stations.filter(stationMatches);
+  const filtered = stations.filter(s => stationMatches(s) && (state.listTab !== 'stamped' || state.completed.has(s.name)));
   document.getElementById('countInfo').textContent = `${filtered.length} / ${stations.length} 件表示`;
   document.getElementById('progressCounter').textContent = `押印済み ${state.completed.size} / ${stations.length} 駅`;
   document.getElementById('openRoutePanel').textContent = `ルート設計（${state.route.length}駅）`;
@@ -563,6 +564,17 @@ function initializeFixedMarkers() {
   renderRoutePanel();
   updateRoutePreview();
 }
+
+Array.from(document.querySelectorAll('.list-tab')).forEach(tab => {
+  tab.addEventListener('click', () => {
+    state.listTab = tab.dataset.tab;
+    document.querySelectorAll('.list-tab').forEach(t => {
+      t.classList.toggle('active', t === tab);
+      t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+    });
+    renderList();
+  });
+});
 
 Array.from(document.querySelectorAll('.area-filter')).forEach(cb => {
   cb.addEventListener('change', () => {
