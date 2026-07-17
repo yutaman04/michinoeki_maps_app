@@ -32,6 +32,9 @@ function setMobileView(mode, save = true) {
   if (save) {
     try { localStorage.setItem(MOBILE_VIEW_STORAGE_KEY, nextMode); } catch (e) {}
   }
+  if (nextMode !== 'split') {
+    layout.style.gridTemplateRows = '';
+  }
   // display:noneから地図を復帰した際、Leafletに新しい表示寸法を再計算させる。
   if (nextMode !== 'list') {
     requestAnimationFrame(() => {
@@ -56,6 +59,43 @@ function initializeMobileView() {
     if (!isMobileLayout()) return;
     const mode = document.getElementById('layout').dataset.mobileView;
     if (mode !== 'list') requestAnimationFrame(() => map.invalidateSize({ pan: false }));
+  });
+  initSplitHandle();
+}
+
+function initSplitHandle() {
+  const handle = document.getElementById('splitHandle');
+  const layout = document.getElementById('layout');
+  let dragging = false;
+
+  handle.addEventListener('pointerdown', e => {
+    if (!isMobileLayout()) return;
+    dragging = true;
+    handle.setPointerCapture(e.pointerId);
+    handle.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  handle.addEventListener('pointermove', e => {
+    if (!dragging) return;
+    const rect = layout.getBoundingClientRect();
+    const HANDLE_H = 20;
+    const MIN_MAP = 150;
+    const MIN_LIST = 100;
+    const maxMap = rect.height - HANDLE_H - MIN_LIST;
+    const mapHeight = Math.min(Math.max(e.clientY - rect.top, MIN_MAP), maxMap);
+    layout.style.gridTemplateRows = `${mapHeight}px ${HANDLE_H}px minmax(${MIN_LIST}px, 1fr)`;
+    map.invalidateSize({ pan: false });
+  });
+
+  handle.addEventListener('pointerup', () => {
+    dragging = false;
+    handle.classList.remove('dragging');
+  });
+
+  handle.addEventListener('pointercancel', () => {
+    dragging = false;
+    handle.classList.remove('dragging');
   });
 }
 
@@ -96,7 +136,8 @@ const state = {
   searchText: '',
   completed: new Set(loadStoredArray(STORAGE_KEYS.completed)),
   route: loadStoredArray(STORAGE_KEYS.route).filter(name => stations.some(s => s.name === name)),
-  currentLocation: null
+  currentLocation: null,
+  listTab: 'all'
 };
 
 function cacheKey(station) {
@@ -183,7 +224,7 @@ function stationMatches(station) {
 function renderList(fitMap = false) {
   const list = document.getElementById('stationList');
   list.innerHTML = '';
-  const filtered = stations.filter(stationMatches);
+  const filtered = stations.filter(s => stationMatches(s) && (state.listTab !== 'stamped' || state.completed.has(s.name)));
   document.getElementById('countInfo').textContent = `${filtered.length} / ${stations.length} 件表示`;
   document.getElementById('progressCounter').textContent = `押印済み ${state.completed.size} / ${stations.length} 駅`;
   document.getElementById('openRoutePanel').textContent = `ルート設計（${state.route.length}駅）`;
@@ -563,6 +604,17 @@ function initializeFixedMarkers() {
   renderRoutePanel();
   updateRoutePreview();
 }
+
+Array.from(document.querySelectorAll('.list-tab')).forEach(tab => {
+  tab.addEventListener('click', () => {
+    state.listTab = tab.dataset.tab;
+    document.querySelectorAll('.list-tab').forEach(t => {
+      t.classList.toggle('active', t === tab);
+      t.setAttribute('aria-selected', t === tab ? 'true' : 'false');
+    });
+    renderList();
+  });
+});
 
 Array.from(document.querySelectorAll('.area-filter')).forEach(cb => {
   cb.addEventListener('change', () => {
