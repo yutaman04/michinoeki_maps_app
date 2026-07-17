@@ -132,7 +132,7 @@ function saveStoredArray(key, value) {
 }
 const state = {
   markers: new Map(),
-  activeAreas: new Set(["オホーツク", "十勝", "釧路・根室"]),
+  activeAreas: new Set(["道北", "道央", "道南", "オホーツク", "十勝", "釧路・根室"]),
   searchText: '',
   completed: new Set(loadStoredArray(STORAGE_KEYS.completed)),
   route: loadStoredArray(STORAGE_KEYS.route).filter(name => stations.some(s => s.name === name)),
@@ -621,6 +621,36 @@ Array.from(document.querySelectorAll('.area-filter')).forEach(cb => {
     state.activeAreas = new Set(Array.from(document.querySelectorAll('.area-filter:checked')).map(el => el.value));
     renderList(true);
   });
+});
+
+const areaFilterToggle = document.getElementById('areaFilterToggle');
+const areaFiltersPanel = document.getElementById('areaFilters');
+
+areaFilterToggle.addEventListener('click', (e) => {
+  e.stopPropagation();
+  const isOpen = areaFiltersPanel.classList.toggle('open');
+  areaFilterToggle.setAttribute('aria-expanded', isOpen ? 'true' : 'false');
+  areaFilterToggle.textContent = isOpen ? 'エリア選択 ▲' : 'エリア選択 ▼';
+});
+
+document.addEventListener('click', (e) => {
+  if (!areaFiltersPanel.contains(e.target) && e.target !== areaFilterToggle) {
+    areaFiltersPanel.classList.remove('open');
+    areaFilterToggle.setAttribute('aria-expanded', 'false');
+    areaFilterToggle.textContent = 'エリア選択 ▼';
+  }
+});
+
+document.getElementById('selectAllAreas').addEventListener('click', () => {
+  document.querySelectorAll('.area-filter').forEach(cb => { cb.checked = true; });
+  state.activeAreas = new Set(Array.from(document.querySelectorAll('.area-filter')).map(el => el.value));
+  renderList(true);
+});
+
+document.getElementById('deselectAllAreas').addEventListener('click', () => {
+  document.querySelectorAll('.area-filter').forEach(cb => { cb.checked = false; });
+  state.activeAreas = new Set();
+  renderList(true);
 });
 
 document.getElementById('search').addEventListener('input', (e) => {

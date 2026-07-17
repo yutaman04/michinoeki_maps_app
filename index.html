@@ -16,9 +16,19 @@
   </header>
 
   <div id="toolbar">
-    <label class="pill"><input type="checkbox" class="area-filter" value="オホーツク" checked> <span class="legend-dot" style="background:#1f77b4"></span>オホーツク</label>
-    <label class="pill"><input type="checkbox" class="area-filter" value="十勝" checked> <span class="legend-dot" style="background:#2ca02c"></span>十勝</label>
-    <label class="pill"><input type="checkbox" class="area-filter" value="釧路・根室" checked> <span class="legend-dot" style="background:#d62728"></span>釧路・根室</label>
+    <button id="areaFilterToggle" class="toolbar-button" aria-expanded="false" aria-controls="areaFilters">エリア選択 ▼</button>
+    <div id="areaFilters">
+      <label class="pill"><input type="checkbox" class="area-filter" value="道北" checked> <span class="legend-dot" style="background:#9467bd"></span>道北</label>
+      <label class="pill"><input type="checkbox" class="area-filter" value="道央" checked> <span class="legend-dot" style="background:#8c564b"></span>道央</label>
+      <label class="pill"><input type="checkbox" class="area-filter" value="道南" checked> <span class="legend-dot" style="background:#e377c2"></span>道南</label>
+      <label class="pill"><input type="checkbox" class="area-filter" value="オホーツク" checked> <span class="legend-dot" style="background:#1f77b4"></span>オホーツク</label>
+      <label class="pill"><input type="checkbox" class="area-filter" value="十勝" checked> <span class="legend-dot" style="background:#2ca02c"></span>十勝</label>
+      <label class="pill"><input type="checkbox" class="area-filter" value="釧路・根室" checked> <span class="legend-dot" style="background:#d62728"></span>釧路・根室</label>
+      <div style="display:flex;gap:4px;">
+        <button id="selectAllAreas" class="toolbar-button">すべて選択</button>
+        <button id="deselectAllAreas" class="toolbar-button">すべて解除</button>
+      </div>
+    </div>
     <input id="search" type="search" placeholder="道の駅名・市町村名で絞り込み" />
     <span id="progressCounter">押印済み 0 / 0 駅</span>
     <button id="openRoutePanel" class="toolbar-button">ルート設計（0駅）</button>
